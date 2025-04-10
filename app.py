@@ -130,11 +130,20 @@ def main():
     # File upload
     uploaded_file = st.file_uploader("Upload your WhatsApp chat file", type="txt", key="chat_upload")
 
+    # If file is uploaded, load and use it (unless overwritten by Firestore)
+    if uploaded_file and user_email:
+        df = load_and_parse_data.load_data(uploaded_file)
+        st.session_state.data = df
+        st.session_state.selected_chat = None  # Reset any previously selected chat
+        st.success("Chat file uploaded and ready for analysis.")
+        if st.button("Save to Firestore"):
+            load_and_parse_data.save_chat_to_firestore(df, user_email, uploaded_file)
+            st.success("Chat data saved to Firestore!")
+
     # Load from Firestore
     if user_email:
         saved_chats = load_and_parse_data.fetch_available_chats(user_email)
 
-        # Select box with saved chats
         if saved_chats:
             selected_chat = st.selectbox(
                 "Or select a saved chat from Firestore",
@@ -157,21 +166,13 @@ def main():
                 df = pd.DataFrame(parsed_data)
                 df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-                # Save to session state
                 st.session_state.data = df
                 st.session_state.selected_chat = selected_chat
-                st.success(f"Loaded chat: {selected_chat}")
+                st.success(f"Loaded chat from Firestore: {selected_chat}")
         else:
             st.info("No previously saved chats found in Firestore.")
 
-    # Save uploaded file to Firestore
-    if uploaded_file and user_email:
-        data = load_and_parse_data.load_data(uploaded_file)
-        if st.button("Save to Firestore"):
-            load_and_parse_data.save_chat_to_firestore(data, user_email, uploaded_file)
-            st.success("Chat data saved to Firestore!")
-
-    # Use session state data as fallback
+    # Always use current session data
     data = st.session_state.data
 
 
