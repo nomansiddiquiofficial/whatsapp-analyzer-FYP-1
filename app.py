@@ -91,11 +91,11 @@ Trending topics analysis would identify the main themes or topics in the chat ov
 occur together. By analyzing how the prominence of these topics changes over time, you can understand shifts in the group's focus or interest."""
 
 
-senti_text = """..."""  # Keep your long description as-is
-topic_text = """..."""
-emoji_text = """..."""
-forecasting_text = """..."""
-word_cloud_text = """..."""
+# senti_text = """..."""  # Keep your long description as-is
+# topic_text = """..."""
+# emoji_text = """..."""
+# forecasting_text = """..."""
+# word_cloud_text = """..."""
 
 # Custom CSS
 st.markdown("""
