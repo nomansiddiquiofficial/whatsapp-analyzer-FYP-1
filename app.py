@@ -118,37 +118,61 @@ def main():
 
     # Get user email from session
     user_email = st.session_state.user.get("email", "unknown_user") if "user" in st.session_state else None
-    data = None
     print("Session state:", st.session_state)
     print("User email:", user_email)
 
+    # Initialize session state variables
+    if "data" not in st.session_state:
+        st.session_state.data = None
+    if "selected_chat" not in st.session_state:
+        st.session_state.selected_chat = None
+
     # File upload
     uploaded_file = st.file_uploader("Upload your WhatsApp chat file", type="txt", key="chat_upload")
-    
 
+    # Load from Firestore
     if user_email:
-        # Fetch previously uploaded chat names
         saved_chats = load_and_parse_data.fetch_available_chats(user_email)
 
+        # Select box with saved chats
         if saved_chats:
-            selected_chat = st.selectbox("Or select a saved chat from Firestore", saved_chats)
+            selected_chat = st.selectbox(
+                "Or select a saved chat from Firestore",
+                saved_chats,
+                index=saved_chats.index(st.session_state.selected_chat)
+                if st.session_state.selected_chat in saved_chats
+                else 0
+            )
 
             if st.button("Load Selected Chat from Firestore") and selected_chat:
-                messages_ref = db.collection("whatsapp_chats").document(user_email).collection("chats").document(selected_chat).collection("messages")
+                messages_ref = (
+                    db.collection("whatsapp_chats")
+                    .document(user_email)
+                    .collection("chats")
+                    .document(selected_chat)
+                    .collection("messages")
+                )
                 messages = messages_ref.stream()
                 parsed_data = [msg.to_dict() for msg in messages]
-                data = pd.DataFrame(parsed_data)
-                data['timestamp'] = pd.to_datetime(data['timestamp'])
+                df = pd.DataFrame(parsed_data)
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+                # Save to session state
+                st.session_state.data = df
+                st.session_state.selected_chat = selected_chat
                 st.success(f"Loaded chat: {selected_chat}")
         else:
             st.info("No previously saved chats found in Firestore.")
 
+    # Save uploaded file to Firestore
     if uploaded_file and user_email:
         data = load_and_parse_data.load_data(uploaded_file)
-
         if st.button("Save to Firestore"):
             load_and_parse_data.save_chat_to_firestore(data, user_email, uploaded_file)
             st.success("Chat data saved to Firestore!")
+
+    # Use session state data as fallback
+    data = st.session_state.data
 
 
     # Sidebar navigation
