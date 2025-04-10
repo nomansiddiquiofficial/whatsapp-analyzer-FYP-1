@@ -119,9 +119,12 @@ def main():
     # Get user email from session
     user_email = st.session_state.user.get("email", "unknown_user") if "user" in st.session_state else None
     data = None
+    print("Session state:", st.session_state)
+    print("User email:", user_email)
 
     # File upload
     uploaded_file = st.file_uploader("Upload your WhatsApp chat file", type="txt", key="chat_upload")
+    
 
     if user_email:
         # Fetch previously uploaded chat names

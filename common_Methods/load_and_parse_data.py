@@ -58,31 +58,31 @@ def load_data(uploaded_file):
     return None
 
 # Save to Firestore
-def save_chat_to_firestore(df, user_id,uploaded_file):
-    # Create a unique name per upload (e.g. timestamp-based)
-    chat_id = uploaded_file.name.replace('.txt', '')
-
+def save_chat_to_firestore(df, user_id, uploaded_file):
+    # Sanitize chat name to remove invalid Firestore characters
+    chat_id = re.sub(r'[\/\.]', '_', uploaded_file.name.replace('.txt', ''))
     
-    chat_ref = db.collection("whatsapp_chats").document(user_id).collection("chats").document(chat_id).collection("messages")
+    chat_ref = db.collection("whatsapp_chats").document(user_id).collection("chats").document(chat_id)
     
     for _, row in df.iterrows():
-        chat_ref.add({
+        chat_ref.collection("messages").add({
             "timestamp": row['timestamp'],
             "sender": row['sender'],
             "message": row['message']
         })
 def fetch_available_chats(user_id):
     try:
-        chats_ref = db.collection("whatsapp_chats").document(user_id).collection("chats")
-        chat_docs = chats_ref.get()
+        print(f"Fetching chats for user: {user_id}")
         
-        if not chat_docs:
-            print(f"No chats found for user {user_id}")
-            return []
-            
-        return [doc.id for doc in chat_docs]
+        # Get all document references under the chats collection
+        chats_ref = db.collection("whatsapp_chats").document(user_id).collection("chats")
+        chat_docs = chats_ref.list_documents()  # Changed from stream() to list_documents()
+        
+        available_chats = [doc.id for doc in chat_docs]
+        
+        print(f"Found chats: {available_chats}")
+        return available_chats
         
     except Exception as e:
         print(f"Error fetching chats: {str(e)}")
         return []
-    
