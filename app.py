@@ -13,36 +13,21 @@ import common_Methods.load_and_parse_data as load_and_parse_data
 import common_Methods.home as home
 import streamlit as st
 import pandas as pd
-import re
-import io
 import matplotlib.pyplot as plt
 import seaborn as sns
-import pandas as pd
-import streamlit as st
 from datetime import datetime
 import plotly.graph_objects as go
 import plotly.express as px
 from ml_Models_Methods.ner import transformers_ner_analysis
 from ml_Models_Methods.perform_sentiment_analysis import perform_sentiment_analysis, visualize_sentiment_analysis
-from ml_Models_Methods.Forcasting  import forecast_message_trends, perform_date
+from ml_Models_Methods.Forcasting import forecast_message_trends, perform_date
 from ml_Models_Methods.text_generation import transformers_text_generation
 from ml_Models_Methods.topic_analysis import perform_topic_modeling, visualize_topics
 from ml_Models_Methods.transformer_sentiment import transformers_sentiment_analysis
 from ml_Models_Methods.text_summarization import transformers_text_summarization
+from common_Methods.load_and_parse_data import db
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Description texts
 senti_text = """The visualizations for the sentiment analysis of your WhatsApp chat data provide insights into the emotional tone of the group conversations:
 
 Distribution of Sentiment Polarity:
@@ -106,89 +91,124 @@ Trending topics analysis would identify the main themes or topics in the chat ov
 occur together. By analyzing how the prominence of these topics changes over time, you can understand shifts in the group's focus or interest."""
 
 
+# senti_text = """..."""  # Keep your long description as-is
+# topic_text = """..."""
+# emoji_text = """..."""
+# forecasting_text = """..."""
+# word_cloud_text = """..."""
 
-# Custom CSS to adjust sidebar content positioning
-st.markdown(
-    """
+# Custom CSS
+st.markdown("""
     <style>
-       
         section[data-testid="stSidebar"] {
             top: 0;
             left: 0;
             height: 100vh;
             background-color: black;
-            
         }
-
         .main .block-container {
             padding-top: 30px !important;
-            
         }
     </style>
-    """,
-
-    unsafe_allow_html=True
+    """, unsafe_allow_html=True
 )
 
 def main():
-    # Display the sidebar at the top
+    st.title("📱 WhatsApp Chat Analyzer")
+
+    # Get user email from session
+    user_email = st.session_state.user.get("email", "unknown_user") if "user" in st.session_state else None
+    print("Session state:", st.session_state)
+    print("User email:", user_email)
+
+    # Initialize session state variables
+    if "data" not in st.session_state:
+        st.session_state.data = None
+    if "selected_chat" not in st.session_state:
+        st.session_state.selected_chat = None
+
+    # File upload
+    uploaded_file = st.file_uploader("Upload your WhatsApp chat file", type="txt", key="chat_upload")
+
+    # If file is uploaded, load and use it (unless overwritten by Firestore)
+    if uploaded_file and user_email:
+        df = load_and_parse_data.load_data(uploaded_file)
+        st.session_state.data = df
+        st.session_state.selected_chat = None  # Reset any previously selected chat
+        st.success("Chat file uploaded and ready for analysis.")
+        if st.button("Save to Firestore"):
+            load_and_parse_data.save_chat_to_firestore(df, user_email, uploaded_file)
+            st.success("Chat data saved to Firestore!")
+
+    # Load from Firestore
+    if user_email:
+        saved_chats = load_and_parse_data.fetch_available_chats(user_email)
+
+        if saved_chats:
+            selected_chat = st.selectbox(
+                "Or select a saved chat from Firestore",
+                saved_chats,
+                index=saved_chats.index(st.session_state.selected_chat)
+                if st.session_state.selected_chat in saved_chats
+                else 0
+            )
+
+            if st.button("Load Selected Chat from Firestore") and selected_chat:
+                messages_ref = (
+                    db.collection("whatsapp_chats")
+                    .document(user_email)
+                    .collection("chats")
+                    .document(selected_chat)
+                    .collection("messages")
+                )
+                messages = messages_ref.stream()
+                parsed_data = [msg.to_dict() for msg in messages]
+                df = pd.DataFrame(parsed_data)
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+                st.session_state.data = df
+                st.session_state.selected_chat = selected_chat
+                st.success(f"Loaded chat from Firestore: {selected_chat}")
+        else:
+            st.info("No previously saved chats found in Firestore.")
+
+    # Always use current session data
+    data = st.session_state.data
+
+
+    # Sidebar navigation
     with st.sidebar:
-        st.image('assets/whatsapp_logo.png',width=150)  # Display a logo
+        st.image('assets/whatsapp_logo.png', width=150)
         st.write("## Navigation")
-        analysis_option = st.selectbox("Choose the Analysis you want to perform",
-                                    ["Home", "About the App","Show Data", "EDA", "Sentiment Analysis", "User Analysis",
-                                        "Topic Analysis", "Emojis and Words Analysis", "Forecasting", "Alert",
-                                        "Funny Analysis", "Transformers-Sentiment Analysis", "NER", "Summarization",
-                                        "Text Generation", "Message Frequency", "Challenge", "Wordcloud"])
+        analysis_option = st.selectbox("Choose the Analysis you want to perform", [
+            "Home", "About the App", "Show Data", "EDA", "Sentiment Analysis", "User Analysis",
+            "Topic Analysis", "Emojis and Words Analysis", "Forecasting", "Alert",
+            "Funny Analysis", "Transformers-Sentiment Analysis", "NER", "Summarization",
+            "Text Generation", "Message Frequency", "Challenge", "Wordcloud"
+        ])
 
-    
     if analysis_option == "Home":
-            home.fyp()
+        home.fyp()
     elif analysis_option == "About the App":
-           about_app() 
-            
-            
+        about_app()
 
-
-    # Create a placeholder for future outputs
     output_placeholder = st.empty()
-    data =  load_and_parse_data.load_data()
+
     if data is not None:
-        
         if analysis_option == "EDA":
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text("Exploratory Data Analysis (EDA) ",40)
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
+            output_placeholder.empty()
+            display_big_bold_centered_text("Exploratory Data Analysis (EDA) ", 40)
             perform_eda(data)
-            pass
 
         elif analysis_option == "User Analysis":
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            
-            
-            display_big_bold_centered_text("""Detailed User Analysis""", 40)
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
+            display_big_bold_centered_text("Detailed User Analysis", 40)
             show_most_frequent_words_by_users(data)
             show_word_count_top_users(data)
             show_one_word_messages_count_top_users(data)
-           # show_one_word_messages_top_users(data)
             show_emoji_usage_top_users(data)
 
         elif analysis_option == "Funny Analysis":
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-
-            display_big_bold_centered_text("Funny Analysis",40)
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
+            display_big_bold_centered_text("Funny Analysis", 40)
             most_active_time(data)
             laugh_counter(data)
             most_used_emojis(data)
@@ -200,116 +220,81 @@ def main():
             chat_wordle(data)
 
         elif analysis_option == "Sentiment Analysis":
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
+            output_placeholder.empty()
             display_big_bold_centered_text("Sentiment Analysis", 40)
             perform_date(data)
             analyzed_data = perform_sentiment_analysis(data)
             visualize_sentiment_analysis(analyzed_data)
             st.markdown(senti_text)
-            pass
 
         elif analysis_option == "Topic Analysis":
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text("Topic Analysis",40)
+            output_placeholder.empty()
+            display_big_bold_centered_text("Topic Analysis", 40)
             num_topics = st.slider("Select number of topics", 3, 10, 5)
             lda_model = perform_topic_modeling(data, num_topics=num_topics)
             visualize_topics(lda_model)
             st.markdown(topic_text)
-            pass
 
         elif analysis_option == "Show Messages per User":
-            output_placeholder.empty()  # Clear previous output
+            output_placeholder.empty()
             display_big_bold_centered_text("Show Messages per User")
             user_messages(data)
 
         elif analysis_option == "Emojis and Words Analysis":
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text("Emojis and Words Analysis",40)
-            
+            output_placeholder.empty()
+            display_big_bold_centered_text("Emojis and Words Analysis", 40)
             processed_word_freq = preprocess_and_extract_words(data)
             emoji_freq = extract_and_count_emojis(data)
             visualize_words_and_emojis(processed_word_freq, emoji_freq)
             st.markdown(emoji_text)
 
         elif analysis_option == "Forecasting":
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text("Forecasting",40)
+            output_placeholder.empty()
+            display_big_bold_centered_text("Forecasting", 40)
             perform_date(data)
             forecast_message_trends(data)
             st.markdown(forecasting_text)
 
         elif analysis_option == "Alert":
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text("Alerts",40)
+            output_placeholder.empty()
+            display_big_bold_centered_text("Alerts", 40)
             alert(data)
 
         elif analysis_option == "Transformers-Sentiment Analysis":
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text("Transformers-Sentiment Analysis",40)
-            display_big_bold_centered_text(" ")
+            output_placeholder.empty()
+            display_big_bold_centered_text("Transformers-Sentiment Analysis", 40)
             transformers_sentiment_analysis(data)
 
         elif analysis_option == "NER":
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text("Named Entity Recognition (NER)",40)
-            display_big_bold_centered_text(" ")
+            output_placeholder.empty()
+            display_big_bold_centered_text("Named Entity Recognition (NER)", 40)
             transformers_ner_analysis(data)
 
         elif analysis_option == "Summarization":
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text("Summarization",40)
-            display_big_bold_centered_text(" ")
+            output_placeholder.empty()
+            display_big_bold_centered_text("Summarization", 40)
             transformers_text_summarization(data)
 
         elif analysis_option == "Text Generation":
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text("Text Generation",40)
-            display_big_bold_centered_text(" ")
+            output_placeholder.empty()
+            display_big_bold_centered_text("Text Generation", 40)
             transformers_text_generation()
 
         elif analysis_option == "Message Frequency":
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text("Message Frequency",40)
-            display_big_bold_centered_text(" ")
+            output_placeholder.empty()
+            display_big_bold_centered_text("Message Frequency", 40)
             message_frequency(data)
 
         elif analysis_option == "Wordcloud":
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
-            output_placeholder.empty()  # Clear previous output
-            display_big_bold_centered_text("Wordcloud",40)
-            display_big_bold_centered_text(" ")
+            output_placeholder.empty()
+            display_big_bold_centered_text("Wordcloud", 40)
             generate_wordcloud(data)
-            display_big_bold_centered_text(" ")
             st.markdown(word_cloud_text)
 
         elif analysis_option == "Show Data":
-            display_big_bold_centered_text(" ")
-            display_big_bold_centered_text(" ")
+            output_placeholder.empty()
             display_big_bold_centered_text("Display the dataframe", 40)
-            display_big_bold_centered_text(" ")
             show_Data(data)
-                        
 
 if __name__ == "__main__":
     main()
-
