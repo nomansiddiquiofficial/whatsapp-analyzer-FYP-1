@@ -212,3 +212,7 @@ firebase_admin
 meson
 subprocess.run
 setuptools-metadata
+firebase_admin
+meson
+subprocess.run
+setuptools-metadata
