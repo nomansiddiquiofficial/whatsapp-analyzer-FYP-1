@@ -97,7 +97,6 @@ mdurl==0.1.2
 mistune==3.0.2
 ml-dtypes==0.4.1
 murmurhash==1.0.11
-mysqlclient==2.2.4
 namex==0.0.8
 nbclient==0.8.0
 nbconvert==7.16.4
@@ -137,7 +136,6 @@ pytest==8.2.2
 python-dateutil==2.8.2
 python-json-logger==2.0.7
 pytz==2023.3.post1
-pywin32==306
 pywinpty==2.0.12
 PyYAML==6.0.1
 pyzmq==25.1.1
